@@ -1,0 +1,122 @@
+
+  // stdlib.swift
+  
+  class Function<ArgumentType, ReturnValue> {
+  	var implementation: ArgumentType -> ReturnValue
+  }
+
+  // dispatch.swift
+  
+  meta func async<ArgumentType>(function f: Function<ArgumentType, Void>) -> Function<ArgumentType, Void> {
+	
+    let method: ArgumentType -> Void = f.implementation
+  	let queue = DispatchQueue.global(qos: .utility)
+	  
+    f.implementation = { argument: ArgumentType in
+		  queue.async {
+		    method(argument)
+       }
+	    }
+    }
+  }
+
+
+Lets unpack this example a little bit. We declare our compile time meta function so that the compile 
+will even consider it for evaluation. Everything inside of the function is regular swift, so that's
+nothing new. The argument to the async function is a generic parameter, however the return value is 
+restricted to the `Void` type. This means that the `async` method can only be applied to functions
+that have no return value (well, that just return the `Void`).
+
+----------------------------------------------------------------------------------------------------
+
+This is a good question that will eventually need an answer:
+
+Will functions that are evaluated at compile time also be eligible to be executed at runtime? What
+about the other way around, can runtime functions be used during compile time?
+
+I think a good answer will be to permit all functions to be evaluated at compile time, and to
+provide along side of that some annotations that restrict execution to either compile time or
+runtime, for example:
+
+  meta func mouldy<ArgType>(f: Function<ArgType, Void>) -> Funciton<ArgType, Void> {
+	  let m = f.implementation
+ 	  f.implementation = { args in 
+		  print("hmmm, this is mouldy....")
+		  m(args)
+	  }
+  }
+
+  real func high<ArgType>(f: Function<ArgType, Void) -> Function<ArgType, Void> {
+  	let m = f.implementation
+  	f.implementation { args in
+  		print("take this.... :D")
+  		m(args)
+  	}
+  }
+
+  @mouldy
+  func gi() { print("bread") }
+
+  @high // Error: Cannot use as an attribute. The function is explicity mark unavailable here...
+  func gi() { print("bread") }
+
+
+I chose the keyword `real` because it hints that the function is guarenteed to exist within the
+execution of the program. This raises more questions however as the converse implies that all
+functions not marked real do not have the guarentee that they will be executed normally... :|
+
+----------------------------------------------------------------------------------------------------
+
+Let's explore some more meta programming concepts.
+
+We want ways to create and manipulate objects in our compilation unit.
+We also want ways to extend objects in other people's compilation unit.
+
+There are multiple events throughout the compilation process that we will want to tap into, what are
+they?
+1. Early Evaluation
+3. Lazy Evaluation
+2. Late Evaluation
+
+----------------------------------------------------------------------------------------------------
+
+If we choose to use lazy evaluation, how will we be able to determine the order of execution without
+using a script?
+
+We can't, really.
+
+Restrict meta functions to only calling other meta functions. Start tracking all functions, closures
+and methods, marking them as either being executed at run time or compile time. Restrict meta 
+functions from being called at runtime. This way we can type check and guarentee which context the 
+function will execute in, and that the required dependencies are available when the funciton 
+executes
+
+Lastly, we'd like some values to cross over from compile time execution into the runtime. Perhaps
+this should be handled by a conformance to a sub-protocol of Codable, although it might be easier
+to just prevent it entirely. The issue is whether we are able to have values persist through compile
+time and then be restored at runtime. Can we do this for arbitary values? No.
+
+Our above example will turn into:
+
+  // stdlib.swift
+
+  class Function<ArgumentType, ReturnValue> {
+  	var implementation: @runtime ArgumentType -> ReturnValue
+  }
+
+  // dispatch.swift
+
+  meta func async<ArgumentType>(function f: Function<ArgumentType, Void>) -> Function<ArgumentType, Void> {
+	
+	  let method: ArgumentType -> Void = f.implementation // infered @runtime
+	  let queue = DispatchQueue.global(qos: .utility)
+	
+	  // Infered to be @runtime
+	  f.implementation = { argument: ArgumentType in
+		  queue.async {
+			  method(argument)
+		  }
+	  }
+	
+	  return f
+  }
