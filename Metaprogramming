@@ -1,3 +1,61 @@
+--------------------------------------------------------------------------------
+
+We would like to write both in the same file Swift code and compile time 
+expressions that can be evaluated to produce valid Swift code.
+
+Let's consider a basic example: Altering the implementation of a function.
+
+In this function, the `meta` keyword restricts the function to being used as an 
+`@attribute` to type definitions, specifically in this case, functions.
+
+import Dispatch
+
+// Declare a new complie time evaluated function.
+meta func async(function f: Function) -> Function {
+
+	let method: (String) -> Void = f.implementation
+	
+	f.implementation = { (comment: String) in
+		// This code will be executed at run time instead of the
+		// provided implementation.
+		let queue = DispatchQueue.global(qos: .utility)
+		queue.async {
+			method(comment)
+		}
+	}
+	
+	return f
+}
+
+@async func sayHi(_ comment: String) {
+	system("say \(comment)")
+}
+
+
+sayHi("Hello, world!") // the computer will speak "Hello, world!" on a mac.
+print("Hello, world!")
+
+DispatchQueue.main.mainLoop()
+
+The above example is simple because it does not capture any values from the
+surrounding contexts. The ways that this could happen would be by capturing a
+value at compile time, or capturing a value at runtime. The first way imples
+that there may be problems with the evaluation order, the second would just
+make the code less efficient.
+
+There are lots of specical cases with altering function definitions due to the
+number of different places that functions (and methods) appear.
+
+- In the global namespace.
+- As a method attached to an object.
+- As a closure.
+
+When given a method, self will be the first argument of the closure provided.
+
+Attached to the function object should be:
+- file and line data
+- what type it is (method, closure, function)
+- potentially a list of what code is executed inside of it :)
 
   // stdlib.swift
   
