@@ -13,9 +13,9 @@ technically different but `written the same way` structures.
 
 How about we just tell the compiler that these two objects in different modules are the same thing, like so:
 
-  Foo.Point ≡ Bar.Point
-  Foo.Point ≡ Soap.Point
-  // => Bar.Point ≡ Soap.Point
+      Foo.Point ≡ Bar.Point
+      Foo.Point ≡ Soap.Point
+     // => Bar.Point ≡ Soap.Point
 
 Once this has been declared, the types become synonymous to each other.
 
