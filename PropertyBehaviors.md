@@ -1,20 +1,76 @@
 # Property Behaviors
 
-## Motivation... the need for better syntax
+Property Behaviors seem cool and I'd like to see them in Swift. The examples are quite
+intriguing and love to be able to use them in some of my existing projects.
 
-I don't like the current property syntax. It resembles too closely to variable declarations, which is
-confusing to read. Am I reading the declaration of a variable or the declaration of a behavior for a variable?
+The rational for rejecting Property Behaviors was that the community had not yet converged
+on a design for them. This design includes the functionality and the notation of the feature.
 
-Up until now, every new line that has started with `<whitespace>var<whitespace>` has been always been a declaration
-of a variable. If the current syntax in the proposal, `var behaviour identifier`, is accepted, then we'd ruin our
-assumption when scanning code.
+I'd like to propose an alternative syntax to the one in the proposal. I'd also like to propose an
+alternative symeantic that compliments the syntax.
 
-Although this could be aided with the use of syntax highlighting, there are other questions that are raised with the
-current syntax:
-- `initialValue` is written as though it's an identifier in our program, why?
-- If `initialValue` is re-evaluated everytime it's referenced, then shouldn't it be declared as a function?
-- `self` is ambigious inside of the behavior, why must we break the trend of what `self` refers to in this
-    specific scenario?
+Lastly, to fully utilise the existing features provided by the compiler, I'd like to introduce a new
+concept, conditional `abstract` variables.
+
+## Pitfalls of the current syntax and notation method.
+
+The property behavior declaration in the currenty proposal states that behaviors are declared
+like so:
+
+    var behavior lazy<Value>: Value {
+        ...
+    }
+
+This unfortunately is extremly similar a variables declaration:
+
+    var behavior: Value = ...
+    
+Given that Swift is aging towards 5 years old, I think the potential for confusion is very high.
+If you would like a more compelling example, then have a look at this:
+
+    var behavior: Int = {
+        set { }
+        get { return 0 }
+    }
+    
+    var behavior foobar<X>: Value {
+        set { }
+        get { return 0 }
+    }
+    
+Here are two closely related declarations, except one just adds an extra identifier after
+another. Semantically, we are doing something completely different however between the two
+declarations. The first one declares a variable, the second introduces a new type (of behavior).
+
+Up until now, every new line that has started with `<whitespace>var<whitespace>` has
+been always been a declaration of a variable. If the current syntax in the proposal,
+`var behaviour identifier`, is accepted, then we'd ruin our assumption when scanning
+code. This of course could be mitigated with syntax highlighting, although we need to consider
+whether we should be relying on them, and whether there could be a more meaningful way to
+annotate this.
+
+## `initialValue`
+
+The `initialValue` concept behaves as though it is a magic variable sythesized and made
+available in every behavior declaration context. You could explain it's funcitonality by using
+existing features in the language `get` like so:
+
+    var initialValue: Value {
+        get {
+            return computedExpressionHere
+        }
+    }
+
+One could liken it to the appearance of `newValue` inside of a variable's `set` method,
+however there appears to be no obvious way to change the identifier binding. I also consider
+re-evaluating expression to be a bad idea. It doesn't make sense to re-evaluate the result
+from a function. Is it going to call the function twice when it's retriving it's value?
+
+## `self`
+
+Breaking the trend of `self` is a bad idea. It will be the only place where `self` will be
+declared as an `optional` `weak` reference. There'll be more on how I'd like to use this
+instead.
 
 ## My alternative, introducing a new type: Behavior
 
