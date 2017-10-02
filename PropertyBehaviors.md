@@ -1,182 +1,264 @@
 # Property Behaviors
 
-Property Behaviors seem cool and I'd like to see them in Swift. The examples are quite
-intriguing and love to be able to use them in some of my existing projects.
+I like the inital proposal for property behaviors, and I'd like to refine the idea. Here are my thoughts on the concepts, some of them could be integrated into the current proposal?
 
-The rational for rejecting Property Behaviors was that the community had not yet converged
-on a design for them. This design includes the functionality and the notation of the feature.
+## Concept
 
-I'd like to propose an alternative syntax to the one in the proposal. I'd also like to propose an
-alternative symeantic that compliments the syntax.
+A behavior may be attached to any variable declaration. It provides an alternative implementation for the `get` and `set` methods provided by default from the compiler. In addition, the behavior also is given a reference to the containing scope, which allows for interesting uses such as updating related properties on demand. A behavior may additionally require accessor methods to be implemented at the use site, which provides a trivial notification interface.
 
-Lastly, to fully utilise the existing features provided by the compiler, I'd like to introduce a new
-concept, conditional `abstract` variables.
+Since Swift permits a variable to have it's `get` and `set` implementation altered from the compiler's default one, we are able to change the concept of what it means to store a value into a variable. That is:
 
-## Pitfalls of the current syntax and notation method.
+    var x: Int {
+        get {
+            return data read from file
+        }
+        set {
+            write data to file
+        }
+    }
 
-The property behavior declaration in the currenty proposal states that behaviors are declared
-like so:
+What this implies is that we are able to provide our own definition of:
+1. The assignment operator.
+2. Evaluation of a particular variable.
 
-    var behavior lazy<Value>: Value {
+Both are intriguing to play around with, but will refer to these concepts using traditional conventions.
+
+## Syntax
+
+Declare property behaviors like this:
+
+    behavior Foo {
         ...
     }
 
-This unfortunately is extremly similar a variables declaration:
+This way:
+• We aren't confused as to whether we are declaring a variable or a behavior.
+• We follow the pattern of 'one word per declaration' for types. That is, it looks similar to `class`, `struct`, `enum` and `protocol`.
 
-    var behavior: Value = ...
+Use the behavior like so:
+
+    var x: Int~Foo
     
-Given that Swift is aging towards 5 years old, I think the potential for confusion is very high.
-If you would like a more compelling example, then have a look at this:
+You may like to read this as: variable x, who's type is Int, with a behavior of Foo. Only one behavior may be attached to a variable. It is done at it's declaration. The solution for stacking behaviors is solved using inheritence (have a read futher on).
 
-    var behavior: Int = {
-        set { }
-        get { return 0 }
-    }
-    
-    var behavior foobar<X>: Value {
-        set { }
-        get { return 0 }
-    }
-    
-Here are two closely related declarations, except one just adds an extra identifier after
-another. Semantically, we are doing something completely different however between the two
-declarations. The first one declares a variable, the second introduces a new type (of behavior).
+The use syntax was chosen because:
+1. We declare type-like things using CamelCase.
+2. The concept of behaviors will be used in a very similar manner to `struct`, `class`, etc...
+3. Breaking the convention of CamelCase seemed weird.
+4. Using `@attribute` notation required lowerCamelCase.
+5. `@attribute` was already being used for comipler attributes... let's choose a different way of notating the concept.
+6. `~` represents a relationship between the two identifiers, and follows the similar use of `&` for attaching protocol requirements onto an existing type.
+7. It was the neatest of all of the other syntax that I considered.
 
-Up until now, every new line that has started with `<whitespace>var<whitespace>` has
-been always been a declaration of a variable. If the current syntax in the proposal,
-`var behaviour identifier`, is accepted, then we'd ruin our assumption when scanning
-code. This of course could be mitigated with syntax highlighting, although we need to consider
-whether we should be relying on them, and whether there could be a more meaningful way to
-annotate this.
+Arguable, the sigil is located in the wrong place.
 
-## `initialValue`
+## Associated Types
 
-The `initialValue` concept behaves as though it is a magic variable sythesized and made
-available in every behavior declaration context. You could explain it's funcitonality by using
-existing features in the language `get` like so:
+1. Behaviors are given access to the containing scope.
+2. Variables act as a translation function of values passing in between storage and temporary memory (ish, this isn't strictly true, but traditionally, that's what variables were).
+3. We live in a type safe world (aka Swift).
 
-    var initialValue: Value {
-        get {
-            return computedExpressionHere
-        }
+Thus: We need to know the type of the containing scope and the variable we are interacting with.
+
+Protocols introduce the concept of associated types, which allows requirements to be attached to a type:
+
+    protocol Foo {
+        associatedType Bar: Sequence
     }
 
-One could liken it to the appearance of `newValue` inside of a variable's `set` method,
-however there appears to be no obvious way to change the identifier binding. I also consider
-re-evaluating expression to be a bad idea. It doesn't make sense to re-evaluate the result
-from a function. Is it going to call the function twice when it's retriving it's value?
+Behaviors will have the same mechanism for interacting with the two previously mentioned types:
 
-## `self`
-
-Breaking the trend of `self` is a bad idea. It will be the only place where `self` will be
-declared as an `optional` `weak` reference. There'll be more on how I'd like to use this
-instead.
-
-## My alternative, introducing a new type: Behavior
-
-Consider now protocol and class inheritence. We shall use a similar mechanism here to describe `behavior`s.
-All behaviors must inherit from either the `let` behavior or the `var` behavior. For explanitory purposes, we can
-write the existing behavior of `let` using our new `behavior` as well. A behavior has two associate values. The first
-is `Value`, which is the type of object that is being proxied by this behavior. The second is the `Owner`, which is the
-type of the containing context. For classes and structures, it is the containing type. For scopped variables, it is the
-empty tuple. 
-
-    open behavior let {
-        associatedType Value
-        // The type this property is attached to.
+    behavior Foo {
         associatedType Owner
-
-        // If you combine this with `owner`, then you get this
-        // axiom:
-        // 
-        // 		owner![keyPath: keypath] == self.get()
-        //
-        public var keypath: KeyPath<Owenr, Value> { get }
-
-        abstract var storage: Value
-        public weak var owner: Owner?
-
-        public init(initialValue: Value) {
-            // because `storage` is used here, everytime `storage` is used in a 
-            // sub-behavior of `let`, this initalizer must be used. 
-            // The compiler infers that because the `storage` property exists in
-            // the sub-behavior, then it must call the super-behavior's initalizer
-            // that initalizes that variable.
-            storage = initialValue
-        }
-
-        public init() {
-            // computed variables, no access to storage is required.
-        }
-
-        open accessor get() -> Value
+        associatedType Value
     }
 
-    open behavior var: let {
-        open mutating accessor set(newValue: Value)
+• `Owner` is the type of the containing scope. The type of the object if the variable is decalared under a `struct`, `class`, `enum` or `protocol`. `Void` for all other scopes.
+• `Value` is the type of the variable that is being stored.
+
+These associated types will be implicitly available, authors will not be required to declare them each time they would like to use them. It is a useful concept for teaching others.
+
+    behavior Foo where Value: Sequence, Owner: Codable {
+        ...
     }
 
-    public behavior countAccesses: var {
+Note:
+    It's interesting to think about the rule placed on the type of `Owner`. What if there was a way to talk about the scope of variables in a function? Or perhaps the global scope? If we could talk about the global scope in this way, then perhaps we could attach protocol requirements on it... This would have practical use cases for plugin development, where you could require that declared in the global scope of a plugin is a variable with a particular type. The Swift Package Manager seems to need something along these lines, with the requirement of the `package` variable.
 
-        public accessor didGet(value: Value, count: Int) { 
-            // default implementation.
+## Initalizers
+
+Behaviors must exactly one of the following initalisers:
+1. `init(initialValue: Type)`
+2. `init()`
+
+Initaliser 1 is called when the variable is first initalised with a value, the typical use case will be where `Type == Value`. In the typical case, out-of-band initalisation is allowed.  `Type != Value`  is the atypical use case, and permits a variable to be initalized with a different type.
+
+Generic parameters are acceptable for initaliser 1 (note that in the above example that `Type` is refering to a concret object, like `String`).
+
+Initializer 2 will be called at the declaration site of the variabile. `get` calls are permitted before a call to `set`.
+
+## Protocols
+
+Behaviors are not permitted to conform to protocols. It does not make sense for:
+
+    behavior Lazy: Sequence {
+        ...
+    }
+
+There is currently no way to access a behavior's variables directly from outside of the behavior. Additionally, a better reason for not permitting this is that behaviors them selves are never explicity instantiated. You can never have a reference to a behavior... but you can, because there is `self`. This needs some more thought.
+
+When we can access some of the values stored on a behavior they will exist, but they will also have a one to one relationship with the variable's declaration. Ugh...
+
+## `get` and `set`
+
+In order to be evaluatable, a behavior must provide the `get` accessor method:
+
+    behavior Foo where Value: ExpressibleByIntegerLiteral {
+        get {
+            return 42
         }
+    }
 
-        public mutating accessor didSet(value: Value, count: Int) { 
-            // default implementation.
+In order for a variable to be writable, the behavior must provide a `set` accessor method:
+
+    behavior Foo {
+        set {
+            ... // save `newValue` somewhere... or not
         }
+    }
 
-        public accessor get() -> Value {
-            precondition(storage != nil)
-            getCount += 1
-            didGet(value: storage!, count: getCount)
-            return storage!
+It is an error to provide a `set` implementation without a `get` implementation, however it is not an error to declare a behavior without a `get` accessor. This is because at the site of the variable declaration we can provide accessor implementations, therefore there is still a chance for the `set` implementation to be provided.
+
+    // using Foo from above...
+    var superDuperRandomNumber: Int~Foo {
+        get {
+            return 42 // chosen by a random dice roll
         }
+    }
 
-        public accessor set(newValue: Value) {
+`get` and `set` are special accessors, because they have syntax provided by the language (mentioned at the start of the document).
+
+If `get` and `set` are not provided by the behavior, then the compiler will synthesize the implementations for them by allocating storage for the variable. In this particular case, a behavior may implement `didSet` and `willSet` on behalf of the variable declaration. `value` will be the identifier for the allocated storage and will be accessable to the behavior.
+
+    behavior Foo {
+        didSet {
+            print(value)
+        }
+    }
+    
+    var x: Int~Foo = 0
+    var y: Int = 0 {
+        didSet {
+            print(y)
+        }
+    }
+    
+    x = 123 // prints '123'
+    y = 456 // prints '456'
+
+I suspect that these rules are tedios to learn. We would not have the new `value` being available if `self` refered to it, however I don't like that concept. Another alternative would be to not provide this feature, and instead require developers to implement the storage themselves if they needed access to it. Another alternative would also be to provide `Let` and `Var` as implementations of this particular functionality. Then developers could inherit from that behavior and receive a reference to the storage.
+
+## Accessors
+
+Behaviors may declare accessor methods. An accessor method is a closure requirement that must be provided at the declaration site of the variable. Like protocols, accessor methods may declare a default implementation, otherwise they must be provided either at the declaration site or by additonal subbehaviors.
+
+    behavior Observable where Value: Equatable {
+        accessor didChange(_ oldValue: Value)
+        
+        var storage: Value
+        
+        get {
+            return storage
+        }
+        
+        set {
+            let oldValue = storage
             storage = newValue
-            setCount += 1
-            didSet(value: storage!, count: setCount)
+            if storage != newValue { didChange(oldValue) }
         }
-
-        // Used for providing an initial value at declaration, but also
-        // for out-of-line assignment.
+        
         init(initialValue: Value) {
-            setCount = 1
             storage = initialValue
-            super.init(initialValue: initialValue)
-
-            // This can be called because `self` is now initalized.
-            didSet(value: storage, count: setCount)
-        }
-
-        // Allows for default initialization.
-        init() {
-            setCount = 0
-            storage = nil
-            super.init()
-        }
-
-        var storage: Value?
-        var getCount: Int = 0
-        var setCount: Int
-    }
-
-    @countAccesses
-    var soap: String {
-        didGet { (value, count) in
-            print("soap gotten \(count) times.")
-        }
-
-        didSet { (value, count) in
-            print("soap set \(count) times.")
         }
     }
+    
+    var x: Int~Observable {
+        didChange {
+            print("x changed to: \(x)")
+        }
+    }
+    
+    x = 1 // calls behavior initalizer
+    x = 2 // prints '2'
+    x = 2 // prints nothing
+    x = 1 // prints '1'
+    
+Accessors may be mutating or nonmutating. If mutating, then they must be attached to a `var`iable.
 
-    soap // fatalError: unwrapping nil value!
-    soap = "Hello, world!" // calls countAccesses.init(initialValue:), then prints "soap set 1 times."
+## Variables and Functions
 
-    // Let's try again.
-    soap = "a" // prints "soap set 1 times."
-    soap // prints "soap gotten 1 times."
-    soap = "b" // prints "soap set 2 times."
+Behaviors can:
+- have stored variables (which themselves can have a behavior attach)
+- implement methods
+- have a nested enum, class or struct
+
+Variables decalared apart of a behavior must follow the normal conventions of initalisation that classes and structures follow. Note that this concept will modify the conventions of initalisation becausue a behavior may not nessesarily need to be initalised before it is read.
+
+## Access Modifiers
+
+Access modifiers are different to accessors. An accessor is a closure that is attached to a behavior while access modifiers indicate the API visibility of the code.
+
+Behaviors are apparently fragile, thus, they must always be explicitly internal. Additionally, because access modifiers have not yet been defined for behaviors, they are not permitted on any declarations inside of the behavior. By always annotating a behavior as `internal`, they will be source compatible if the semantics of access modifiers changes for them in the future.
+
+### Suggestions for access modifiers meaning
+
+    [private..<open] behavior Foo where Value: Observable {
+        [internal..<open] accessor didChange(_ oldValue: Value)
+        [private..<open] var observers: [Observer]
+        [private..<open] func postNotification() { // ... }
+        [internal..<open] init() { // ... }
+        [internal..<open] init(initialValue: Value) { // ... }
+    }
+
+## Generic Paramaters or Associated Types
+
+Not thought about yet.
+
+## KeyPaths
+
+It would be nice to tell the behavior what it's `KeyPath` is. This perhaps could be exposed with a good compile time metadata API.
+
+## Alternative syntax
+
+Declaraing the behavior:
+
+    behavior Foo { ... }
+    var behavior Foo { ... }
+    
+# Examples re-written from the proposal
+
+## Lazy
+
+    behavior Lazy {
+        var value: Value? = nil
+        var expression: () -> Value
+        
+        init(initialValue expr: @autoclouser @escaping () -> Value) {
+            expression = expr
+        }
+        
+        mutating get {
+            if let value = self.value {
+                return value
+            } else {
+                value = expression()
+                return value!
+            }
+        }
+        
+        mutating set {
+            self.value = newValue
+        }
+    }
+
+
